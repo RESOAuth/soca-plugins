@@ -6,6 +6,12 @@ The requirements are independent of current plugin capabilities and implementati
 cost. Platform-specific integration must preserve the same security and product
 outcomes.
 
+This profile covers browser-based OIDC sign-in to a host application using CIMD,
+including admission, local accounts and host sessions. Each implementation must
+identify the login surfaces it protects, such as administration or end-user access.
+API authorization, other OAuth grants and delegated access to unrelated services
+require separate, explicit profiles; they must not be inferred from SSO support.
+
 The imperative statements below are requirements for that target. Each plugin must
 track them as **supported**, **partially supported** or **planned**, with a version,
 acceptance evidence and open gaps. A feature can be disabled by an operator while
@@ -45,13 +51,12 @@ it replaces. Plan delivery incrementally without lowering these acceptance crite
   algorithm metadata. Use valid JSON, appropriate content types, explicit cache
   lifetimes and predictable cache invalidation. Validate public reachability and
   document contents before enabling login or promoting a new key.
-- **F-05 — Proxy mode.** Support a configurable HTTPS metadata proxy, such as
-  [Dynamic CIMD](https://github.com/RESOAuth/dynamic-cimd), when the application
-  cannot host publicly reachable metadata, including local HTTPS development.
-  Validate that the retrieved document matches the generated public metadata and
-  exact client ID. Support both inline public keys and externally hosted JWKS where
-  the provider profile permits them. Keep provider authentication independent of
-  the metadata proxy, with the same protocol and security guarantees in both modes.
+- **F-05 — Proxy mode.** Support a configurable HTTPS metadata proxy when the
+  application cannot host publicly reachable metadata, including local HTTPS
+  development. Validate that the retrieved document matches the generated public
+  metadata and exact client ID. Support both inline public keys and externally
+  hosted JWKS where the provider profile permits them. Keep provider authentication
+  independent of the metadata proxy, with the same security guarantees in both modes.
 - **F-06 — Public data boundary.** Publish only public client information and
   public keys, using `jwks_uri` or inline `jwks` as appropriate. Never publish
   private keys, client secrets, tokens, user claims or access-policy lists. Explain
@@ -79,14 +84,24 @@ it replaces. Plan delivery incrementally without lowering these acceptance crite
   assertions. Coordinate promotion atomically across workers, monitor overdue or
   failed rotation, and provide safe retry, operator-triggered rotation and emergency
   revocation. A manual maintenance window is a gap against this requirement.
-- **F-10 — Algorithm breadth and agility.** Support separately configured
-  client-assertion and ID-token verification profiles spanning ECDSA
-  (`ES256`, `ES384`, `ES512`), RSA-PSS (`PS256`, `PS384`, `PS512`), `RS256`
-  interoperability, fully specified EdDSA (`Ed25519`, `Ed448`) and standardized
-  post-quantum profiles (`ML-DSA-44`, `ML-DSA-65`, `ML-DSA-87`). Use maintained,
+- **F-10 — ES256 default and algorithm agility.** Implement **ES256 with P-256 as
+  the required default and recommended algorithm** for client-assertion signing and
+  ID-token verification. Generate P-256 client keys by default and explicitly set
+  `token_endpoint_auth_signing_alg` and `id_token_signed_response_alg` to `ES256`
+  in client metadata. Sign assertions with client keys and verify ID tokens with
+  the trusted issuer's keys. Configure these purposes independently; use only
+  ES256 until an administrator explicitly approves a different algorithm for the
+  relevant issuer and purpose. Fail clearly
+  if the provider cannot support the configured profile; never select an alternate
+  solely from provider ordering or an incoming token header.
+
+  The highest-bar interoperability target also includes `ES384`, `ES512`, RSA-PSS
+  (`PS256`, `PS384`, `PS512`), `RS256`, fully specified EdDSA (`Ed25519`, `Ed448`)
+  and standardized post-quantum profiles (`ML-DSA-44`, `ML-DSA-65`, `ML-DSA-87`).
+  Treat support for these algorithms separately from enabling them. Use maintained,
   reviewed libraries and published test vectors. Select only the intersection of
-  local policy and provider capabilities, pin key types and algorithms, support
-  orderly algorithm migration, and reject unsigned tokens, symmetric substitutions,
+  explicit local policy and provider capabilities, pin key types and algorithms,
+  support orderly migration, and reject unsigned tokens, symmetric substitutions,
   deprecated profiles and silent downgrade. Missing provider support is a reported
   compatibility constraint; missing plugin support remains an implementation gap.
 - **F-11 — Provider-key changes.** Support provider signing-key rollover with
@@ -160,7 +175,10 @@ it replaces. Plan delivery incrementally without lowering these acceptance crite
   mapping and key lifecycle settings. Support deployment-managed secrets and policy
   locks. Validate and preview changes, reject stale concurrent edits, audit updates
   and support rollback. Require connection/document checks and a successful real
-  test login before activating a new profile; report each result separately.
+  test login before activating a new profile; report each result separately. Keep
+  validation mode free of account creation, linking and permission changes, and
+  preserve the operator's current session. Report the effective admission and
+  mapping decisions without applying them.
 - **F-21 — Login and logout.** Integrate a clear SSO entry point into the host's
   login experience, create normal host sessions after successful admission, and
   restrict post-login destinations to safe local URLs. Support configurable session
@@ -174,6 +192,21 @@ it replaces. Plan delivery incrementally without lowering these acceptance crite
   silently relaxing authentication checks. Protect recovery accounts with strong
   local authentication, least privilege and audited use, and make recovery testable
   before SSO rollout and after upgrades.
+- **F-23 — Host integration and plugin lifecycle.** Respect the host's account,
+  permission, session, password-reset and extension APIs. Support canonical HTTPS
+  origins, reverse proxies and mounted path prefixes without exposing protected
+  routes. Define install, upgrade, disable, re-enable and uninstall behaviour.
+  Disabling SSO must stop new SSO transactions and invalidate pending ones; define
+  what happens to existing SSO sessions. Preserve local accounts, permissions and
+  recovery access. Make permanent removal of plugin data explicit, scoped and
+  auditable, including the implications for keys, links and retained backups.
+- **F-24 — Token lifecycle.** Request only the scopes needed for the configured
+  login and profile features. Do not request offline access or retain refresh
+  tokens for ordinary sign-in. Discard authorization codes and access tokens after
+  their immediate use; retain an ID token only when a configured protocol feature
+  requires it, with encryption, access controls and a defined expiry. Any separate
+  delegated-access profile must define secure token storage, audience/resource
+  binding, refresh rotation, revocation and deletion explicitly.
 
 ## Non-functional requirements
 
@@ -234,6 +267,15 @@ it replaces. Plan delivery incrementally without lowering these acceptance crite
   live-login results for hosted and proxy modes. Keep simulated tests, successful
   document fetches and real end-user login evidence distinct; state untested
   behavior and known gaps explicitly.
+- **N-09 — Implementation profile and traceability.** Publish the assessed revision
+  of these requirements, supported protocol/provider profiles, protected login
+  surfaces and a requirement-by-requirement evidence matrix. Publish security
+  defaults, units, configurable ranges and hard limits for transaction/assertion
+  lifetimes, clock skew, key rotation, metadata/JWKS cache bounds, session revocation
+  and diagnostic retention. State how overlap/retention is derived from those
+  limits, how unconfirmed provider cache bounds are handled, and which settings are
+  operator choices. Include executable fixtures and acceptance procedures that
+  another developer can reproduce; a published support claim needs dated evidence.
 
 ## Required acceptance evidence
 
@@ -245,20 +287,15 @@ the full outcome; a manual workaround does not close the gap. Retain evidence fo
 | --- | --- |
 | Metadata | Hosted and proxy documents, exact client ID, public-only keys, unavailable/incorrect documents and proxy URL changes. |
 | Authentication | Successful login and cancellation; expired/replayed/wrong-browser callbacks; issuer, audience, nonce and signature failures; unsupported algorithms. |
+| Algorithm policy | ES256/P-256 as the fresh-install default for both purposes; explicit independent overrides; rejection of provider-order/header-driven fallback; published vectors for every supported algorithm. |
 | Key lifecycle | Unattended overlapping rotation in both metadata modes, algorithm migration, restarts, multiple workers, provider rollover, cache overlap, emergency revocation and recovery after failure. |
 | Accounts and claims | Protected linking of existing users, new users, provisioning disabled, deny precedence, unverified/missing email, duplicate/disabled accounts, concurrent creation/linking, reassigned email, provider/client migration and preserved local edits/permissions. |
 | Sessions and assurance | Fresh authentication, assurance policy, permission revocation, session expiry, local/provider/back-channel logout, and provider outages. |
 | Operations | Tested local recovery, rolling upgrades, failover/restore, fault injection, latency/load budgets, accessibility checks, redacted diagnostics and verified release provenance. |
+| Lifecycle and privacy | Validation without account/session side effects; disable/re-enable/uninstall; scoped data deletion; token disposal; backup implications and preserved local accounts. |
+| Developer handoff | Requirements revision, evidence matrix, documented security defaults and limits, and reproducible fixtures for the declared deployment profile. |
 
 ## References
-
-Current implementation status belongs in the individual plugins' documentation
-and support matrices. It does not constrain these requirements:
-
-- [WordPress overview](https://github.com/RESOAuth/wordpress-soca-plugin/blob/main/README.md)
-  and [security decisions](https://github.com/RESOAuth/wordpress-soca-plugin/blob/main/docs/SECURITY.md).
-- [Wagtail overview](https://github.com/RESOAuth/wagtail-soca-plugin/blob/main/README.md)
-  and [security decisions](https://github.com/RESOAuth/wagtail-soca-plugin/blob/main/docs/SECURITY.md).
 
 The targets above combine product requirements with protocol requirements. Follow
 the applicable specifications and document implemented revisions and provider
@@ -269,11 +306,17 @@ profiles:
   Internet-Draft, not a final RFC.
 - [OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html)
   and [Discovery 1.0](https://openid.net/specs/openid-connect-discovery-1_0.html).
+- [OIDC client metadata definitions](https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata)
+  — metadata vocabulary for the client profile, including explicit signing
+  algorithm preferences; this does not require a dynamic registration endpoint.
 - [OAuth security best current practice (RFC 9700)](https://www.rfc-editor.org/rfc/rfc9700.html)
   and [PKCE (RFC 7636)](https://www.rfc-editor.org/rfc/rfc7636.html).
 - [JWT client authentication (RFC 7523)](https://www.rfc-editor.org/rfc/rfc7523.html),
   [JWT best current practices (RFC 8725)](https://www.rfc-editor.org/rfc/rfc8725.html)
   and [JWK (RFC 7517)](https://www.rfc-editor.org/rfc/rfc7517.html).
+- [JSON Web Algorithms (RFC 7518)](https://www.rfc-editor.org/rfc/rfc7518.html),
+  including the ES256/P-256 signing profile. ES256 as the recommended default is
+  a SOCA product requirement, independent of algorithm preferences in other profiles.
 - [IANA JOSE algorithm registry](https://www.iana.org/assignments/jose), including
   the registered fully specified EdDSA and ML-DSA signing profiles. Registry
   registration alone does not establish implementation safety or provider support.
