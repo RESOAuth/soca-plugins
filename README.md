@@ -25,10 +25,11 @@ release status and security guidance.
 ## Shared requirements
 
 [requirements.md](requirements.md) describes the high-level functional and
-non-functional requirements each SOCA plugin should aim to support, including
-self-hosted and proxied CIMD, key rotation, signing algorithms, new and existing
-users, claim association, security and operations. These are shared development
-targets; each plugin documents its current coverage and limitations.
+non-functional requirements defining the best-case target for every SOCA plugin,
+including self-hosted and proxied CIMD, key rotation, signing algorithms, new and
+existing users, claim association, security and operations. They set the highest
+bar for the finished product. Current plugin limitations are gaps to close; each
+plugin documents its progress against the requirements.
 
 SOCA is developed by [RESOAuth](https://github.com/RESOAuth). The plugins start
 with RESOAuth provider settings and can be configured for other compatible
