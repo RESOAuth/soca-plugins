@@ -1,382 +1,288 @@
 # Shared SOCA plugin requirements
 
-This document sets the **best-case, highest-bar target** for every Simple OAuth
-CIMD Access (SOCA) plugin: a complete, secure, reliable and easy-to-operate product.
-The requirements are independent of current plugin capabilities and implementation
-cost. Platform-specific integration must preserve the same security and product
-outcomes.
+These are the best-case requirements for Simple OAuth CIMD Access (SOCA) plugins,
+independent of implementation cost or current capabilities. They cover browser-based
+OIDC sign-in, admission, local accounts and host sessions. Declare the protected
+login surfaces; API authorisation, other grants and delegated access need separate
+profiles.
 
-This profile covers browser-based OIDC sign-in to a host application using CIMD,
-including admission, local accounts and host sessions. Each implementation must
-identify the login surfaces it protects, such as administration or end-user access.
-API authorisation, other OAuth grants and delegated access to unrelated services
-require separate, explicit profiles; they must not be inferred from SSO support.
-
-The imperative statements below are requirements for that target. Each plugin must
-track them as **supported**, **partially supported** or **planned**, with a version,
-acceptance evidence and open gaps. A feature can be disabled by an operator while
-still being a required capability. Use **not applicable** only with an evidenced
-platform/protocol reason, never because an implementation is an MVP or lacks a
-library. An operational workaround does not count as support for the capability
-it replaces. Plan delivery incrementally without lowering these acceptance criteria.
+Imperatives define the target. Track each ID as supported, partially supported or
+planned, with versioned evidence and gaps (N-09). Use not applicable only for a
+justified platform/protocol constraint. Operator-disabled features remain required
+capabilities; workarounds and incremental delivery do not lower the bar.
 
 ## Functional requirements
 
 ### Provider connection and sign-in
 
-- **F-01: Provider configuration.** Provide sensible RESOAuth defaults and support
-  multiple explicitly trusted OIDC/CIMD provider profiles with isolated issuer,
-  tenant/site, algorithm and admission policies. Validate discovery, exact issuer,
-  endpoints and capabilities before activation. Reject explicitly unsupported CIMD;
-  report missing discovery support as unconfirmed until a real login establishes
-  interoperability. Never discover a trusted issuer from untrusted identity claims.
-- **F-02: Secure login flow.** Use OIDC authorisation code flow with PKCE S256,
-  independent state and nonce, exact callback URLs and asymmetric
-  `private_key_jwt` client authentication. Protect against request forgery, code
-  replay and issuer mix-up, and bind each transaction to the initiating browser.
-- **F-03: Identity validation.** Verify the ID-token signature and required issuer,
-  subject, audience, nonce and time claims before admitting a user. Validate
-  authorisation-response issuer and other conditional claims where applicable.
-  Bind UserInfo to the same validated subject and reject conflicting identity
-  claims. Support fresh authentication and enforce configured assurance requirements
-  using validated `auth_time`, `acr` and `amr` with explicit provider semantics;
-  email verification alone cannot establish MFA. OAuth access alone is not
-  authentication.
+- **F-01: Provider configuration.** Provide sensible RESOAuth defaults and multiple
+  explicitly trusted OIDC/CIMD profiles, isolating issuer, tenant/site, algorithm and
+  admission policies. Validate discovery, exact issuer, endpoints and capabilities
+  before activation. Reject explicit CIMD non-support; missing support remains
+  unconfirmed until a real login succeeds. Never derive issuer trust from claims.
+- **F-02: Secure login flow.** Use OIDC authorisation code flow, PKCE S256,
+  independent state and nonce, exact callbacks and asymmetric `private_key_jwt`.
+  Prevent CSRF, code replay and issuer mix-up with F-25 transaction/browser binding.
+- **F-03: Identity validation.** Validate ID-token signatures, issuer, subject,
+  audience, nonce, times and conditional claims, including response issuer.
+  Match UserInfo to the validated subject and reject conflicting identity claims.
+  Support fresh authentication and enforce configured assurance using validated
+  `auth_time`, `acr` and `amr` with documented provider semantics. Email verification does not
+  establish MFA; OAuth access does not establish identity.
 
-### Client metadata: hosted and proxied CIMD
+### Client metadata
 
-- **F-04: Self-hosted documents.** Serve public client metadata and public JWKS
-  over HTTPS without requiring login. Include the exact document URL as
-  `client_id`, registered callback URLs and accurate client authentication and
-  algorithm metadata. Use valid JSON, appropriate content types, explicit cache
-  lifetimes and predictable cache invalidation. Validate public reachability and
-  document contents before enabling login or promoting a new key.
-- **F-05: Proxy mode.** Support a configurable HTTPS metadata proxy when the
-  application cannot host publicly reachable metadata, including local HTTPS
-  development. When proxy mode is selected, default to
-  `https://dynamic-cimd.resoauth.cloud/cimd/%s`. Provide code/deployment
-  configuration for replacing the proxy URL template and a privileged settings
-  field within the host's existing admin GUI, where available, as defined in F-20.
-  Use one `%s` placeholder in the HTTPS path for unpadded base64url-encoded UTF-8 JSON
-  containing public client metadata; the proxy must return `client_id` equal to
-  the exact resulting document URL. Validate custom templates and provide a
-  generated-URL preview, connection/document check and reset to the default.
+- **F-04: Metadata and self-hosting.** Serve public CIMD and JWKS over HTTPS without
+  login. Include the exact document URL as `client_id`, callbacks and accurate
+  authentication/algorithm metadata. Use valid JSON, suitable content types,
+  explicit cache lifetimes and predictable invalidation. Verify public reachability
+  and contents before enabling login or promoting keys.
 
-  Validate that the retrieved document matches the generated public metadata and
-  exact client ID. Support both inline public keys and externally hosted JWKS where
-  the provider profile permits them. Keep provider authentication independent of
-  the metadata proxy, with the same security guarantees in both modes.
-- **F-06: Public data boundary.** Publish only public client information and
-  public keys, using `jwks_uri` or inline `jwks` as appropriate. Never publish
-  private keys, client secrets, tokens, user claims or access-policy lists. Explain
-  that proxy URLs and their encoded metadata are public and visible to the proxy.
-- **F-07: Client identity changes.** Maintain stable client IDs wherever the
-  hosting mode permits. Provide a controlled migration when a metadata or key
-  change creates a new proxy URL/client ID. Explain the effect on consent,
-  pairwise subjects and account association. Preserve in-flight logins through
-  routine changes using bounded configuration/key snapshots; invalidate
-  affected transactions immediately for security revocations. Validate provider
-  restrictions on metadata/callback origins before applying a change.
+  In both hosted and proxy modes, populate `client_name`, `client_uri`, `logo_uri`,
+  `policy_uri` (privacy policy) and `tos_uri` (terms) from application identity and
+  published pages exposed by the CMS/platform to plugins. Use these defaults where
+  available, with overrides under F-20. Identify the application, using its own
+  branding/legal pages and public HTTPS URLs; omit unavailable optional fields.
+- **F-05: Proxy mode.** Support publicly hosted metadata for applications without
+  public document endpoints, including local HTTPS development. Default to
+  `https://dynamic-cimd.resoauth.cloud/cimd/%s`. Make the template configurable
+  under F-20. Replace one `%s` in the HTTPS path with unpadded base64url-encoded
+  UTF-8 public metadata JSON. Validate template safety and exact returned metadata,
+  including `client_id` equal to the resulting URL. Provide URL preview, document
+  check and reset to default. Keep provider authentication independent of the proxy
+  and preserve the hosted mode's security guarantees.
+- **F-06: Public data boundary.** Support `jwks_uri` and inline `jwks` where the
+  provider permits them. Publish only public client information/keys, never private
+  keys, secrets, tokens, user claims or admission rules. Explain that proxy URLs,
+  including encoded metadata, are public and visible to the proxy.
+- **F-07: Client identity changes.** Keep client IDs stable where possible. Control
+  metadata/key migrations that change IDs, explaining consent, pairwise-subject and
+  account-link effects. Preserve routine in-flight logins using bounded snapshots;
+  invalidate affected transactions immediately on security revocation. Check
+  provider metadata/callback-origin restrictions before changes.
 
-### Keys and algorithm support
+### Keys and algorithms
 
-- **F-08: Persistent keys.** Generate or provision strong, persistent asymmetric
-  signing keys with stable key identifiers. Protect private material using the
-  host's protected secret storage or authenticated encryption, separated from
-  application data. Support external key-management services and non-exportable
-  signing keys. Coordinate keys across workers, retain them across restarts and
-  upgrades, and provide tested backup, restore and lost-key recovery procedures.
-- **F-09: Automated client-key rotation.** Rotate keys automatically with overlap
-  and no planned SSO outage in both hosted and proxy modes. Confirm replacement
-  publication, account for provider/CDN metadata and JWKS cache bounds, warm up
-  replacement keys and retain retiring keys through outstanding transactions and
-  assertions. Coordinate promotion atomically across workers, monitor overdue or
-  failed rotation, and provide safe retry, operator-triggered rotation and emergency
-  revocation. A manual maintenance window is a gap against this requirement.
-- **F-10: ES256 default and algorithm agility.** Implement **ES256 with P-256 as
-  the required default and recommended algorithm** for client-assertion signing and
-  ID-token verification. Generate P-256 client keys by default and explicitly set
-  `token_endpoint_auth_signing_alg` and `id_token_signed_response_alg` to `ES256`
-  in client metadata. Sign assertions with client keys and verify ID tokens with
-  the trusted issuer's keys. Configure these purposes independently; use only
-  ES256 until an administrator explicitly approves a different algorithm for the
-  relevant issuer and purpose. Fail clearly if the provider cannot support the
-  configured profile; never select an alternate
-  solely from provider ordering or an incoming token header.
+- **F-08: Persistent keys.** Provision strong asymmetric keys with stable IDs.
+  Protect private material in secret storage or authenticated encryption separate
+  from application data. Support external key management and non-exportable keys.
+  Coordinate workers, survive restarts/upgrades and test backup, restore and
+  lost-key recovery.
+- **F-09: Automated rotation.** Rotate client keys unattended, with overlap and no
+  planned SSO outage in hosted and proxy modes. Confirm publication, respect
+  provider/CDN cache bounds, warm replacements and retain retiring keys through
+  outstanding transactions/assertions. Promote atomically across workers; monitor
+  overdue/failing rotation and support safe retries, manual triggers and emergency
+  revocation.
+- **F-10: ES256 default and algorithm agility.** Use **ES256/P-256** as the required
+  default and recommended profile for assertion signing and ID-token verification.
+  Generate P-256 client keys and explicitly set `token_endpoint_auth_signing_alg`
+  and `id_token_signed_response_alg`
+  to `ES256`. Sign with client keys; verify with trusted issuer keys. Configure
+  purposes independently, enabling alternatives only with explicit administrator
+  approval for that issuer/purpose. Pin compatible algorithms/key types to the
+  intersection of local policy and provider support. Reject unsigned tokens,
+  symmetric substitutions, deprecated profiles and silent fallback, including
+  selection driven solely by token headers or provider ordering.
 
-  The highest-bar interoperability target also includes `ES384`, `ES512`, RSA-PSS
-  (`PS256`, `PS384`, `PS512`), `RS256`, fully specified EdDSA (`Ed25519`, `Ed448`)
-  and standardised post-quantum profiles (`ML-DSA-44`, `ML-DSA-65`, `ML-DSA-87`).
-  Treat support for these algorithms separately from enabling them. Use maintained,
-  reviewed libraries and published test vectors. Select only the intersection of
-  explicit local policy and provider capabilities, pin key types and algorithms,
-  support orderly migration, and reject unsigned tokens, symmetric substitutions,
-  deprecated profiles and silent downgrade. Missing provider support is a reported
-  compatibility constraint; missing plugin support remains an implementation gap.
-- **F-11: Provider-key changes.** Support provider signing-key rollover with
-  bounded JWKS retrieval/refresh and clear cache expiry rules. Unknown keys and
-  invalid signatures must not trigger unlimited fetches or bypass validation.
-  Check assertion claims and audience against the configured provider profile and
-  isolate key caches by issuer and purpose. Retire expired trust and honour known
-  key revocations without accepting stale keys to preserve availability.
+  Also support `ES384`, `ES512`, `PS256`, `PS384`, `PS512`, `RS256`, fully specified
+  EdDSA (`Ed25519`, `Ed448`) and standardised `ML-DSA-44`, `ML-DSA-65`, `ML-DSA-87`,
+  with orderly migration and published test vectors. Support does not imply enabled
+  defaults. Report provider incompatibility clearly; missing plugin support is a gap.
+- **F-11: Provider-key changes.** Bound JWKS fetches/refreshes, expiry and unknown-key
+  or signature-failure retries. Isolate caches by issuer/purpose; validate assertion
+  claims and audience against that profile. Honour known revocations and expired
+  trust without accepting stale keys for availability.
 
-### Admission, existing accounts and new accounts
+### Admission and accounts
 
-- **F-12: Admission policy.** Support explicit email/domain allow and deny rules
-  with documented matching semantics, deny precedence and deny-by-default settings.
-  Provide a policy preview and explicit rules for sensitive accounts/sites. Where
-  email controls admission or account selection, require a validated email with
-  `email_verified` equal to boolean `true` from the trusted provider. Apply policy
-  on every SSO login, including existing users.
-- **F-13: Existing users.** Select exactly one eligible local account using the
-  documented association policy. Respect disabled accounts, site membership and
-  the host's access requirements. Reject ambiguous matches. Preserve local
-  passwords, usernames, roles, groups and elevated privileges unless an explicit,
-  separately authorised operation changes them; SSO must not reactivate users.
-- **F-14: New users.** Make first-login provisioning opt-in. Create an account
-  only after authentication and admission succeed, with an explicitly configured,
-  least-privileged role or group. Validate required local fields, avoid usable
-  default passwords, and handle collisions, concurrent logins and failed creation
-  without duplicate accounts, partial privileges or a session for an invalid user.
-- **F-15: Authorisation boundary.** Keep authentication, admission and local
-  permissions distinct. Provider profile or role claims must not grant
-  administrative privileges implicitly. Support explicit, allowlisted claim-to-group
-  or role mappings with issuer binding, privilege ceilings and audited changes;
-  administrative elevation requires independent local approval. Enforce removal and
-  policy revocation for future logins and affected existing SSO sessions, with a
-  documented maximum propagation time.
+- **F-12: Admission policy.** Deny by default; provide email/domain allow and deny
+  rules, deny precedence, sensitive-account/site controls and policy preview. Apply
+  admission on every login. Email-based rules require a validated email and boolean
+  `email_verified: true` from the trusted issuer.
 
-### Claim association and profile mapping
+  Validate DNS name syntax and length on save and startup. Accept exact domains or
+  one leading `*.` followed by a dotted domain: `example.com` or `*.example.com`. Reject
+  `*example.com`, embedded/repeated wildcards, URLs, email addresses, empty labels
+  and single-label domains/suffixes. Match case-insensitively on whole DNS labels:
+  exact rules match only that domain; `*.example.com` matches one or more subdomain
+  labels, including `a.b.example.com`, but neither `example.com` nor
+  `badexample.com`. Report invalid rules; never silently ignore or broaden them.
+- **F-13: Existing users.** Resolve exactly one eligible account; reject ambiguity,
+  disabled users and missing site/access permissions. Preserve local credentials,
+  usernames, roles, groups and privileges unless separately authorised. Never
+  reactivate an account through SSO.
+- **F-14: New users.** Make provisioning opt-in, after authentication and admission,
+  into an explicitly configured least-privileged role/group. Validate local fields;
+  handle collisions, concurrent creation and failures atomically without duplicate
+  accounts, usable default passwords, partial privileges or invalid-user sessions.
+- **F-15: Authorisation boundary.** Separate identity, admission and local permissions.
+  Support explicit allowlisted claim-to-role/group mappings with issuer binding,
+  privilege ceilings and audited changes. Never grant implicit admin privileges;
+  elevation needs independent local approval. Enforce removal/policy revocation for
+  future logins and affected SSO sessions within a documented propagation bound.
 
-- **F-16: Protected account association.** Use a persisted, unique issuer/subject
-  association for returning users. Linking an existing local account requires
-  local reauthentication or an audited administrator-approved process. A verified
-  email can propose a match but cannot silently take over an existing account,
-  especially a privileged one. Provide explicit linking, unlinking and recovery,
-  prevent concurrent conflicting links, and never use mutable profile fields as
-  proof of ownership. Keep account links separate from admission and profile data.
-- **F-17: Identity lifecycle.** Define behaviour when issuer, subject, client ID or
-  email changes, and when an address is reused. Reject conflicting associations
-  and provide an administrator-controlled, audited migration and recovery path.
-  Support provider/client migrations without duplicate accounts or silent relinking.
-  Do not infer that a new pairwise subject belongs to an existing user from a
-  display name, username or newly matching email.
-- **F-18: Profile claims.** Support documented mappings for common claims such
-  as `given_name`, `family_name`, `name` and `preferred_username` where the host has
-  suitable fields, plus administrator-configured allowlisted custom-field mappings.
-  Provide preview, validation and explicit fill-empty, create-only and synchronisation
-  policies for each field. Separate profile updates from account selection and
-  admission. Define precedence between signed ID-token claims and subject-matched
-  UserInfo, validate types/lengths/content, handle missing claims and collisions,
-  preserve local edits by default and audit mapping changes. Do not allow profile
-  mappings to write credentials, identity links or privilege fields.
-- **F-19: Claim diagnostics.** Provide a safe way to understand available claims
-  and mapping decisions through a privileged, explicitly enabled, short-lived,
-  redacted claim inspector. Scope capture to an explicitly selected test transaction
-  and explain the data displayed. Encrypt retained reports and expire/delete them
-  automatically. Do not retain raw tokens or turn ordinary login logs into claim
-  dumps.
+### Association and claims
 
-### Administration, user experience and recovery
+- **F-16: Protected association.** Persist unique issuer/subject links for returning
+  users. Linking an existing account requires local reauthentication or audited
+  administrator approval; verified email may suggest a match, never establish
+  ownership alone. Provide linking, unlinking and recovery, prevent concurrent
+  conflicting links and separate links from admission/profile data.
+- **F-17: Identity lifecycle.** Handle changed issuer, subject, client ID or email
+  and reused addresses through audited, administrator-controlled migration/recovery.
+  Reject conflicts, duplicates and silent relinking. Never infer a replacement
+  pairwise subject from mutable profile claims.
+- **F-18: Profile claims.** Map `given_name`, `family_name`, `name`,
+  `preferred_username` and allowlisted custom claims to suitable fields. Provide
+  preview and per-field fill-empty, create-only or synchronisation policies.
+  Define ID-token/UserInfo precedence; validate types, lengths and content, handle
+  missing claims/collisions, preserve local edits by default and audit mapping
+  changes. Keep profile mapping separate from selection/admission; prohibit writes
+  to credentials, identity links and privilege fields.
+- **F-19: Claim diagnostics.** Provide privileged, opt-in, short-lived, redacted
+  inspection scoped to a selected test transaction. Explain captured data, encrypt
+  retained reports and delete automatically on expiry. Never retain raw tokens or
+  include claim dumps in routine logs.
 
-- **F-20: Host admin UI and headless configuration.** Every plugin must provide
-  complete, documented code/deployment configuration for all supported settings.
-  Where the host already provides an admin GUI, integrate sensible, accessible
-  settings into that GUI. Do not create a separate admin GUI or require one on a
-  headless platform. Cover provider profiles, metadata mode and proxy URL,
-  admission, provisioning, claim mapping, sessions, diagnostics and key lifecycle.
-  Follow the host's admin conventions, with clear inputs, sensible defaults, help
-  and actionable validation. Keep private secrets in protected deployment storage;
-  an existing admin UI can manage references and show redacted status.
+### Configuration, sessions and operations
 
-  Support headless installation, initial setup and subsequent configuration changes
-  without opening the plugin's admin UI or saving a form. Provide non-UI interfaces
-  for configuration checks, status, enable/disable and maintenance. Where UI
-  configuration exists, apply the same defaults, validation and security policy
-  through UI and code. Document precedence and expose effective values and their
-  configuration sources through non-UI tools and any existing admin UI. Make
-  deployment-locked settings read-only in that UI. Repeated deployment of the same
-  configuration must be safe and reproducible. Audit updates, reject stale
-  concurrent edits and support rollback.
+- **F-20: Host UI and headless configuration.** Provide documented code/deployment
+  configuration for every supported setting. Support headless installation, setup,
+  changes, checks, status, enable/disable and maintenance without visiting an admin
+  UI or saving a form. Integrate accessible settings into an existing host admin
+  GUI only; do not invent a separate GUI. Follow host conventions with clear inputs,
+  sensible defaults, help and actionable validation. Keep secrets deployment-managed;
+  any UI handles references and redacted status.
 
-  Require connection/document checks and a successful real test login before
-  activating a new profile; report each result separately. Keep validation mode
-  free of account creation, linking and permission changes, and preserve the
-  operator's current session. Report effective admission and mapping decisions
-  without applying them.
-- **F-21: Login and logout.** Integrate a clear SSO entry point into the host's
-  login experience, create normal host sessions after successful admission, and
-  restrict post-login destinations to safe local URLs. Support configurable session
-  lifetime, reauthentication and revocation, local logout, RP-initiated provider
-  logout and validated back-channel logout for providers advertising those features.
-  Keep local logout reliable during provider outages. Offer optional automatic SSO
-  redirects with loop prevention and a reliable local recovery path.
-- **F-22: Local recovery.** Retain a usable local administrator login and a
-  documented SSO bypass/disable procedure. Provider, proxy, key or configuration
-  failures must produce actionable errors without locking administrators out or
-  silently relaxing authentication checks. Protect recovery accounts with strong
-  local authentication, least privilege and audited use, and make recovery testable
-  before SSO rollout and after upgrades.
-- **F-23: Host integration and plugin lifecycle.** Respect the host's account,
-  permission, session, password-reset and extension APIs. Support canonical HTTPS
-  origins, reverse proxies and mounted path prefixes without exposing protected
-  routes. Define install, upgrade, disable, re-enable and uninstall behaviour.
-  Disabling SSO must stop new SSO transactions and invalidate pending ones; define
-  what happens to existing SSO sessions. Preserve local accounts, permissions and
-  recovery access. Make permanent removal of plugin data explicit, scoped and
-  auditable, including the implications for keys, links and retained backups.
-- **F-24: Token lifecycle.** Request only the scopes needed for the configured
-  login and profile features. Do not request offline access or retain refresh
-  tokens for ordinary sign-in. Discard authorisation codes and access tokens after
-  their immediate use; retain an ID token only when a configured protocol feature
-  requires it, with encryption, access controls and a defined expiry. Any separate
-  delegated-access profile must define secure token storage, audience/resource
-  binding, refresh rotation, revocation and deletion explicitly.
+  Share defaults, validation and security policy across code/UI. Document precedence;
+  expose effective values/sources through non-UI tools and any existing GUI, with
+  deployment-locked fields read-only. Make repeated deployment safe/reproducible;
+  audit changes, reject stale edits and support rollback. Require document checks
+  and a real test login before profile activation, reporting results separately.
+  Test mode previews admission/mapping without account creation, linking, permission
+  changes or replacing the operator's session.
+- **F-21: Login/logout.** Use host login entry points/sessions and safe local return
+  URLs. Support session lifetime, reauthentication, revocation, local logout and
+  advertised RP-initiated/back-channel logout. Validate provider logout messages;
+  local logout must survive provider outages. Optional automatic redirects need
+  loop prevention and local recovery.
+- **F-22: Local recovery.** Retain local administrator login and documented SSO
+  bypass/disable procedures. Protect recovery access with strong local
+  authentication, least privilege and audit. Test before rollout/after upgrades;
+  failures must be actionable without lockout or weakened authentication.
+- **F-23: Host/plugin lifecycle.** Respect host account, permission, session,
+  password-reset and extension APIs. Support canonical HTTPS, trusted reverse
+  proxies and path prefixes without exposing protected routes. Define install,
+  upgrade, disable, re-enable and uninstall behaviour. Disable stops new SSO and
+  invalidates pending transactions; define existing-session handling. Preserve local
+  accounts, permissions and recovery. Make permanent deletion explicit, scoped and
+  audited, covering keys, links and backup implications.
+- **F-24: Token lifecycle.** Request minimum scopes for configured features; ordinary
+  sign-in needs neither offline access nor retained refresh tokens. Discard codes
+  and access tokens after use. Retain ID tokens only for a configured protocol need,
+  encrypted, access-controlled and expiring. Separate delegated-access profiles must
+  define storage, audience/resource binding, refresh rotation, revocation and deletion.
+- **F-25: Platform sessions and browser storage.** Reuse CMS/platform/framework
+  session/security facilities. Protect the per-transaction PKCE **verifier**, expected
+  nonce and state association with confidentiality and tamper resistance; derive
+  the S256 challenge from the verifier. Bind transactions to browser, issuer,
+  client ID and callback; User-Agent matching alone is insufficient. Expire,
+  atomically consume once across workers and clean up temporary state; support
+  parallel tabs and rotate the authenticated session ID.
 
-### Session and transaction storage
-
-- **F-25: Platform sessions and minimal browser storage.** Prefer the existing
-  CMS/platform/framework session and security facilities for login transactions
-  and the resulting authenticated session. Securely retain the per-transaction
-  PKCE **verifier**, expected nonce and state association with confidentiality and
-  tamper resistance. The S256 challenge is derived from the verifier and does not
-  replace it. Bind these values to the initiating browser, issuer, client ID and
-  callback; expire and consume each transaction once, support parallel login tabs,
-  and rotate the authenticated session identifier using the platform's APIs.
-
-  Favour stateless plugin operation using platform-provided session, cryptographic
-  and replay facilities. Avoid a separate plugin session system, duplicate
-  persistent transaction storage and additional cookies wherever the platform can
-  provide the required guarantees. Browser-carried transaction state must be
-  authenticated, encrypted if it contains secrets, short-lived and bound to the
-  initiating browser. A signed or encrypted state envelope alone does not establish
-  browser binding or prevent replay; retain minimal shared replay state when
-  necessary to enforce one-time consumption across workers.
-
-  If an additional cookie is necessary for secure browser binding, document why
-  the platform facilities are insufficient. Use the smallest necessary,
-  short-lived, narrowly scoped cookie with `Secure`, `HttpOnly` and an appropriate
-  `SameSite` policy. Avoid JavaScript storage, including `localStorage`,
-  `sessionStorage` and IndexedDB; any unavoidable use needs a documented necessity
-  and security review. Never expose verifiers, tokens or other secret transaction
-  material in JavaScript-readable storage or plaintext URLs. Cookie avoidance or
-  statelessness must never weaken confidentiality, browser binding or replay checks.
+  Favour stateless plugin operation using platform session/crypto/replay facilities,
+  avoiding duplicate stores and new cookies. Browser-carried state needs integrity,
+  encryption of secrets, expiry and browser binding. Signing/encryption alone cannot
+  establish browser binding or single use; keep minimal shared replay state if needed.
+  Justify any extra cookie; minimise its scope/lifetime and use `Secure`, `HttpOnly`
+  and appropriate `SameSite`. Avoid `localStorage`, `sessionStorage` and IndexedDB;
+  unavoidable use needs documented necessity/security review. Never put secret
+  transaction material in JavaScript-readable storage or plaintext URLs. Statelessness
+  and cookie avoidance must preserve confidentiality, browser binding and replay checks.
 
 ## Non-functional requirements
 
-- **N-01: Secure implementation.** Use maintained protocol/cryptographic
-  libraries and host security APIs, backed by a maintained threat model. Protect
-  admin actions against CSRF, escape displayed content, consume login transactions
-  atomically once, and expire and clean up temporary state. Follow F-25 for platform
-  sessions and strong browser binding; matching User-Agent strings alone is not
-  sufficient. Use secure defaults and least privilege throughout, with no
-  production switch that bypasses required
-  protocol, certificate, identity or authorisation checks.
-- **N-02: Network safety.** Validate TLS for outbound HTTPS, defend discovery,
-  metadata and key fetches against SSRF and DNS rebinding, and enforce response-size
-  limits, total request deadlines and redirect policies. Reject CIMD fetch redirects.
-  Configure canonical external URLs and trusted reverse proxies rather than trusting
-  arbitrary Host or forwarded headers. Test IPv4/IPv6, mixed DNS answers, rebinding
-  and slow/large responses, and support deployment egress restrictions without
-  weakening checks.
-- **N-03: Privacy and secrets.** Request only necessary scopes/claims, minimise
-  stored identity data, and document external services, data flows, retention and
-  deletion. Keep secrets and tokens out of metadata, logs, errors, URLs and release
-  artefacts; the protocol's short-lived callback code/state parameters must be
-  redacted from access logs. Encrypt retained sensitive data, define bounded
-  retention and automatic deletion, and document backup implications. Make any
-  optional telemetry explicitly opt-in and keep authentication data out of it.
-- **N-04: Reliability and concurrency.** Work across supported multi-worker,
-  multi-site and database deployments with correctly scoped configuration, shared
-  state where needed and safe concurrent account creation/key maintenance. Support
-  rolling upgrades and routine maintenance without a planned SSO outage. Publish
-  availability and recovery objectives for supported deployment profiles, test
-  failover and restore, and fail closed during outages or expired trust. Recovery
-  must not resurrect revoked credentials, links or transactions.
-- **N-05: Performance and abuse resistance.** Keep normal application requests
-  inexpensive, use bounded caching where appropriate, rate-limit expensive login
-  and diagnostic operations, and prevent refresh storms. Document cleanup and
-  scheduled-maintenance needs, resource bounds and deployment rate-limit controls.
-  Publish measurable login latency, throughput, storage and cleanup budgets with
-  representative load-test results; verify bounded behaviour under sustained abuse.
-- **N-06: Observability and usability.** Meet WCAG 2.2 AA for plugin-owned
-  login/admin screens, including keyboard and assistive-technology checks. Provide
-  understandable errors and redacted diagnostic references. Distinguish protocol,
-  metadata, admission and local-account failures for operators without exposing
-  secrets or enabling public account enumeration. Audit sensitive configuration
-  changes and account-association/provisioning operations using access-controlled,
-  tamper-evident audit records with documented retention. Expose health, rotation
-  state and security/availability metrics without disclosing identity data.
-- **N-07: Compatibility and maintenance.** Publish supported host/runtime
-  versions, dependency requirements, installation/upgrade/uninstall behaviour,
-  licensing, release notes and security reporting instructions. Use reproducible
-  packaging, signed release artefacts and build provenance, a software bill of
-  materials, immutable dependency/workflow references and automated vulnerability
-  checks. Publish a security response/patch policy, enforce release gates for
-  unresolved critical/high findings, and test migrations and rollback.
-- **N-08: Verification and interoperability.** Test the packaged plugin and
-  supported platform combinations, including negative security cases and browser
-  flows, concurrency, fault injection and recovery. Run applicable OIDC conformance
-  suites, automated protocol/security checks and independent security review with
-  tracked remediation. Record provider profiles, algorithm coverage and dated
-  live-login results for hosted and proxy modes. Keep simulated tests, successful
-  document fetches and real end-user login evidence distinct; state untested
-  behaviour and known gaps explicitly.
-- **N-09: Implementation profile and traceability.** Publish the assessed revision
-  of these requirements, supported protocol/provider profiles, protected login
-  surfaces and a requirement-by-requirement evidence matrix. Publish security
-  defaults, units, configurable ranges and hard limits for transaction/assertion
-  lifetimes, clock skew, key rotation, metadata/JWKS cache bounds, session revocation
-  and diagnostic retention. State how overlap/retention is derived from those
-  limits, how unconfirmed provider cache bounds are handled, and which settings are
-  operator choices. Include executable fixtures and acceptance procedures that
-  another developer can reproduce; a published support claim needs dated evidence.
+- **N-01: Secure implementation.** Use maintained protocol/cryptographic libraries,
+  host security APIs, a maintained threat model, secure defaults and least privilege.
+  Protect admin actions against CSRF, escape output and apply F-25. Do not permit
+  production bypasses of protocol, certificate, identity or authorisation checks.
+- **N-02: Network safety.** Verify HTTPS/TLS, prevent SSRF/DNS rebinding and bound
+  response sizes, total deadlines and redirects; reject CIMD fetch redirects. Never
+  trust arbitrary Host/forwarded headers for canonical origins. Support restricted
+  egress and test IPv4/IPv6, mixed DNS answers and slow/large responses.
+- **N-03: Privacy/secrets.** Minimise identity storage; document external services,
+  data flows, retention, deletion and backups. Encrypt sensitive retained data and
+  delete automatically. Exclude secrets/tokens from logs, errors, URLs and releases;
+  redact callback codes/state from access logs. Telemetry must be opt-in and exclude
+  authentication data.
+- **N-04: Reliability.** Support scoped multi-site/multi-worker/database deployments,
+  shared state and safe concurrent provisioning/key maintenance. Routine maintenance
+  and rolling upgrades must avoid planned SSO outages. Publish availability/recovery
+  objectives; test failover/restore. Fail closed on outages/expired trust; restore
+  must not revive revoked credentials, links or transactions.
+- **N-05: Performance/abuse.** Keep normal requests inexpensive; bound caches, login
+  and diagnostic rates, refreshes, storage and cleanup. Document scheduling and
+  deployment rate controls. Publish latency/throughput/resource budgets and load-test
+  evidence, including sustained abuse.
+- **N-06: Observability/usability.** Meet WCAG 2.2 AA for plugin-owned screens,
+  including keyboard/assistive-technology checks. Provide clear errors/redacted
+  references that distinguish protocol, metadata, admission and account failures
+  without secrets or enumeration. Audit configuration, links and provisioning using
+  access-controlled, tamper-evident records with retention limits. Expose health,
+  rotation and security/availability metrics without identity data.
+- **N-07: Maintenance/releases.** Document supported hosts/runtimes, dependencies,
+  licensing, installation/upgrades/uninstall, releases and security reporting.
+  Provide reproducible packages, signed artefacts/provenance, an SBOM, immutable
+  dependency/workflow references and vulnerability checks. Publish response/patch
+  policy, block releases with unresolved critical/high findings and test migrations/
+  rollback.
+- **N-08: Verification.** Test packaged releases/platform combinations, negative
+  security cases, browsers, concurrency, faults and recovery. Run applicable OIDC
+  conformance suites, protocol/security checks and independent security review with
+  tracked remediation. Record provider/algorithm coverage, vectors and dated live
+  logins in both metadata modes. Distinguish simulations, document checks and real
+  logins; disclose gaps.
+- **N-09: Implementation evidence.** Publish the assessed requirements revision and
+  per-ID support/version/evidence/gaps, provider profiles and protected login
+  surfaces. Document security defaults, units, ranges and hard limits for
+  transaction/assertion lifetimes, clock skew, rotation, metadata/JWKS caching,
+  session revocation and diagnostic retention. Explain derived overlap/retention, unconfirmed
+  provider cache bounds and operator choices. Supply reproducible fixtures and
+  acceptance procedures with dated results.
 
-## Required acceptance evidence
+## Acceptance evidence
 
-Use the requirement IDs above in each plugin's support matrix and release
-checklist. A requirement is supported only when its acceptance evidence verifies
-the full outcome; a manual workaround does not close the gap. Retain evidence for:
+Verify each supported ID, including failure and concurrency cases. Explicitly test:
 
-| Area | Representative checks |
+| Area | Cases |
 | --- | --- |
-| Metadata | Hosted and proxy documents, the default Dynamic CIMD template, custom proxy configuration through code and any existing admin GUI, precedence/locks, template validation, exact client ID, public-only keys, unavailable/incorrect documents and proxy URL changes. |
-| Configuration | Integration with an existing admin GUI where available; no invented GUI on headless hosts; complete headless setup from a clean install; code changes after prior UI use where applicable; matching defaults/validation; effective values and precedence/locks; safe repeated deployment; non-UI checks, status and maintenance. |
-| Authentication | Successful login and cancellation; expired/replayed/wrong-browser callbacks; issuer, audience, nonce and signature failures; unsupported algorithms. |
-| Algorithm policy | ES256/P-256 as the fresh-install default for both purposes; explicit independent overrides; rejection of provider-order/header-driven fallback; published vectors for every supported algorithm. |
-| Key lifecycle | Unattended overlapping rotation in both metadata modes, algorithm migration, restarts, multiple workers, provider rollover, cache overlap, emergency revocation and recovery after failure. |
-| Accounts and claims | Protected linking of existing users, new users, provisioning disabled, deny precedence, unverified/missing email, duplicate/disabled accounts, concurrent creation/linking, reassigned email, provider/client migration and preserved local edits/permissions. |
-| Sessions and assurance | Fresh authentication, assurance policy, permission revocation, session expiry, local/provider/back-channel logout, and provider outages. |
-| Session storage | Reuse of platform facilities, protected verifier/nonce, copied-callback and replay rejection, parallel tabs, session fixation prevention, stateless-envelope tampering/expiry, and documented necessity for any extra cookie or JavaScript storage. |
-| Operations | Tested local recovery, rolling upgrades, failover/restore, fault injection, latency/load budgets, accessibility checks, redacted diagnostics and verified release provenance. |
-| Lifecycle and privacy | Validation without account/session side effects; disable/re-enable/uninstall; scoped data deletion; token disposal; backup implications and preserved local accounts. |
-| Developer handoff | Requirements revision, evidence matrix, documented security defaults and limits, and reproducible fixtures for the declared deployment profile. |
+| Domains | Exact/apex/subdomain/nested matches; `*.example.com` versus invalid `*example.com`; deny precedence and rejected malformed rules. |
+| Metadata/configuration | Hosted/default/custom proxy checks; platform name, branding/legal URLs, overrides and omitted unavailable fields in both modes; wrong documents/IDs, changed URLs, clean headless setup, prior UI settings, precedence/locks and repeat deployment. |
+| Authentication/algorithms | Cancellation, wrong issuer/audience/nonce/signature, ES256 defaults, independent overrides, prohibited fallback and vectors for every algorithm. |
+| Transactions/sessions | Copied callbacks, replay, parallel tabs, state tampering/expiry, fixation, logout/revocation/assurance and provider outages. |
+| Keys/accounts | Cache overlap, rollover/revocation across workers, duplicate/disabled/reassigned accounts, identity migrations, concurrent creation/linking and preserved local edits/permissions. |
+| Operations | Recovery, failover/restore, upgrades, accessibility/load, release provenance, test-mode side effects, disable/uninstall, token disposal and scoped deletion. |
 
-## References
+## Standards
 
-The targets above combine product requirements with protocol requirements. Follow
-the applicable specifications and document implemented revisions and provider
-profiles:
+Implement and record applicable revisions. CIMD draft 02 is an Internet-Draft;
+ES256 as default is a SOCA product choice. Registry listing alone does not prove
+implementation safety or provider support.
 
-- [OAuth Client ID Metadata Document, draft 02](https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html):
-  the CIMD revision reviewed for this initial requirements document; an
-  Internet-Draft, not a final RFC.
-- [OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html)
-  and [Discovery 1.0](https://openid.net/specs/openid-connect-discovery-1_0.html).
-- [OIDC client metadata definitions](https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata):
-  metadata vocabulary for the client profile, including explicit signing
-  algorithm preferences; this does not require a dynamic registration endpoint.
-- [OAuth security best current practice (RFC 9700)](https://www.rfc-editor.org/rfc/rfc9700.html)
-  and [PKCE (RFC 7636)](https://www.rfc-editor.org/rfc/rfc7636.html).
-- [JWT client authentication (RFC 7523)](https://www.rfc-editor.org/rfc/rfc7523.html),
-  [JWT best current practices (RFC 8725)](https://www.rfc-editor.org/rfc/rfc8725.html)
-  and [JWK (RFC 7517)](https://www.rfc-editor.org/rfc/rfc7517.html).
-- [JSON Web Algorithms (RFC 7518)](https://www.rfc-editor.org/rfc/rfc7518.html),
-  including the ES256/P-256 signing profile. ES256 as the recommended default is
-  a SOCA product requirement, independent of algorithm preferences in other profiles.
-- [IANA JOSE algorithm registry](https://www.iana.org/assignments/jose), including
-  the registered fully specified EdDSA and ML-DSA signing profiles. Registry
-  registration alone does not establish implementation safety or provider support.
-- [RP-Initiated Logout 1.0](https://openid.net/specs/openid-connect-rpinitiated-1_0.html)
-  and [Back-Channel Logout 1.0](https://openid.net/specs/openid-connect-backchannel-1_0.html).
-- [Web Content Accessibility Guidelines 2.2](https://www.w3.org/TR/WCAG22/), Level AA.
+- [CIMD draft 02](https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html).
+- OIDC [Core](https://openid.net/specs/openid-connect-core-1_0.html),
+  [Discovery](https://openid.net/specs/openid-connect-discovery-1_0.html) and
+  [client metadata](https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata)
+  (metadata vocabulary; no dynamic registration endpoint required).
+- [OAuth security BCP](https://www.rfc-editor.org/rfc/rfc9700.html) and
+  [PKCE](https://www.rfc-editor.org/rfc/rfc7636.html).
+- [JWT assertions](https://www.rfc-editor.org/rfc/rfc7523.html),
+  [JWT BCP](https://www.rfc-editor.org/rfc/rfc8725.html),
+  [JWK](https://www.rfc-editor.org/rfc/rfc7517.html),
+  [algorithms](https://www.rfc-editor.org/rfc/rfc7518.html) and
+  [JOSE registry](https://www.iana.org/assignments/jose).
+- [Client metadata fields](https://www.rfc-editor.org/rfc/rfc7591.html#section-2).
+- [RP-initiated logout](https://openid.net/specs/openid-connect-rpinitiated-1_0.html)
+  and [back-channel logout](https://openid.net/specs/openid-connect-backchannel-1_0.html).
+- [WCAG 2.2](https://www.w3.org/TR/WCAG22/), Level AA.
