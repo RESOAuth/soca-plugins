@@ -208,14 +208,43 @@ it replaces. Plan delivery incrementally without lowering these acceptance crite
   delegated-access profile must define secure token storage, audience/resource
   binding, refresh rotation, revocation and deletion explicitly.
 
+### Session and transaction storage
+
+- **F-25 — Platform sessions and minimal browser storage.** Prefer the existing
+  CMS/platform/framework session and security facilities for login transactions
+  and the resulting authenticated session. Securely retain the per-transaction
+  PKCE **verifier**, expected nonce and state association with confidentiality and
+  tamper resistance. The S256 challenge is derived from the verifier and does not
+  replace it. Bind these values to the initiating browser, issuer, client ID and
+  callback; expire and consume each transaction once, support parallel login tabs,
+  and rotate the authenticated session identifier using the platform's APIs.
+
+  Favour stateless plugin operation using platform-provided session, cryptographic
+  and replay facilities. Avoid a separate plugin session system, duplicate
+  persistent transaction storage and additional cookies wherever the platform can
+  provide the required guarantees. Browser-carried transaction state must be
+  authenticated, encrypted if it contains secrets, short-lived and bound to the
+  initiating browser. A signed or encrypted state envelope alone does not establish
+  browser binding or prevent replay; retain minimal shared replay state when
+  necessary to enforce one-time consumption across workers.
+
+  If an additional cookie is necessary for secure browser binding, document why
+  the platform facilities are insufficient. Use the smallest necessary,
+  short-lived, narrowly scoped cookie with `Secure`, `HttpOnly` and an appropriate
+  `SameSite` policy. Avoid JavaScript storage, including `localStorage`,
+  `sessionStorage` and IndexedDB; any unavoidable use needs a documented necessity
+  and security review. Never expose verifiers, tokens or other secret transaction
+  material in JavaScript-readable storage or plaintext URLs. Cookie avoidance or
+  statelessness must never weaken confidentiality, browser binding or replay checks.
+
 ## Non-functional requirements
 
 - **N-01 — Secure implementation.** Use maintained protocol/cryptographic
   libraries and host security APIs, backed by a maintained threat model. Protect
   admin actions against CSRF, escape displayed content, consume login transactions
-  atomically once, and expire and clean up temporary state. Use secure host sessions
-  and a strong browser binding;
-  matching User-Agent strings alone is not sufficient. Use secure defaults and
+  atomically once, and expire and clean up temporary state. Follow F-25 for platform
+  sessions and strong browser binding; matching User-Agent strings alone is not
+  sufficient. Use secure defaults and
   least privilege throughout, with no production switch that bypasses required
   protocol, certificate, identity or authorization checks.
 - **N-02 — Network safety.** Validate TLS for outbound HTTPS, defend discovery,
@@ -291,6 +320,7 @@ the full outcome; a manual workaround does not close the gap. Retain evidence fo
 | Key lifecycle | Unattended overlapping rotation in both metadata modes, algorithm migration, restarts, multiple workers, provider rollover, cache overlap, emergency revocation and recovery after failure. |
 | Accounts and claims | Protected linking of existing users, new users, provisioning disabled, deny precedence, unverified/missing email, duplicate/disabled accounts, concurrent creation/linking, reassigned email, provider/client migration and preserved local edits/permissions. |
 | Sessions and assurance | Fresh authentication, assurance policy, permission revocation, session expiry, local/provider/back-channel logout, and provider outages. |
+| Session storage | Reuse of platform facilities, protected verifier/nonce, copied-callback and replay rejection, parallel tabs, session fixation prevention, stateless-envelope tampering/expiry, and documented necessity for any extra cookie or JavaScript storage. |
 | Operations | Tested local recovery, rolling upgrades, failover/restore, fault injection, latency/load budgets, accessibility checks, redacted diagnostics and verified release provenance. |
 | Lifecycle and privacy | Validation without account/session side effects; disable/re-enable/uninstall; scoped data deletion; token disposal; backup implications and preserved local accounts. |
 | Developer handoff | Requirements revision, evidence matrix, documented security defaults and limits, and reproducible fixtures for the declared deployment profile. |
