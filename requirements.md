@@ -53,10 +53,18 @@ it replaces. Plan delivery incrementally without lowering these acceptance crite
   document contents before enabling login or promoting a new key.
 - **F-05: Proxy mode.** Support a configurable HTTPS metadata proxy when the
   application cannot host publicly reachable metadata, including local HTTPS
-  development. Validate that the retrieved document matches the generated public
-  metadata and exact client ID. Support both inline public keys and externally
-  hosted JWKS where the provider profile permits them. Keep provider authentication
-  independent of the metadata proxy, with the same security guarantees in both modes.
+  development. When proxy mode is selected, default to
+  `https://dynamic-cimd.resoauth.cloud/cimd/%s`. Provide a privileged admin UI field
+  and code/deployment configuration for replacing the proxy URL template. Use one
+  `%s` placeholder in the HTTPS path for unpadded base64url-encoded UTF-8 JSON
+  containing public client metadata; the proxy must return `client_id` equal to
+  the exact resulting document URL. Validate custom templates and provide a
+  generated-URL preview, connection/document check and reset to the default.
+
+  Validate that the retrieved document matches the generated public metadata and
+  exact client ID. Support both inline public keys and externally hosted JWKS where
+  the provider profile permits them. Keep provider authentication independent of
+  the metadata proxy, with the same security guarantees in both modes.
 - **F-06: Public data boundary.** Publish only public client information and
   public keys, using `jwks_uri` or inline `jwks` as appropriate. Never publish
   private keys, client secrets, tokens, user claims or access-policy lists. Explain
@@ -171,10 +179,13 @@ it replaces. Plan delivery incrementally without lowering these acceptance crite
 ### Administration, user experience and recovery
 
 - **F-20: Configuration and validation.** Provide an accessible admin experience
-  and automation interfaces for provider, metadata mode, admission, provisioning,
-  mapping and key lifecycle settings. Support deployment-managed secrets and policy
-  locks. Validate and preview changes, reject stale concurrent edits, audit updates
-  and support rollback. Require connection/document checks and a successful real
+  and code/deployment configuration, plus automation interfaces, for provider,
+  metadata mode and proxy URL, admission, provisioning, mapping and key lifecycle
+  settings. Document precedence, show the effective value and configuration source,
+  and make deployment-locked settings read-only in the UI. Support
+  deployment-managed secrets and policy locks. Validate and preview changes,
+  reject stale concurrent edits, audit updates and support rollback. Require
+  connection/document checks and a successful real
   test login before activating a new profile; report each result separately. Keep
   validation mode free of account creation, linking and permission changes, and
   preserve the operator's current session. Report the effective admission and
@@ -315,7 +326,7 @@ the full outcome; a manual workaround does not close the gap. Retain evidence fo
 
 | Area | Representative checks |
 | --- | --- |
-| Metadata | Hosted and proxy documents, exact client ID, public-only keys, unavailable/incorrect documents and proxy URL changes. |
+| Metadata | Hosted and proxy documents, the default Dynamic CIMD template, custom proxy configuration through both UI and code, precedence/locks, template validation, exact client ID, public-only keys, unavailable/incorrect documents and proxy URL changes. |
 | Authentication | Successful login and cancellation; expired/replayed/wrong-browser callbacks; issuer, audience, nonce and signature failures; unsupported algorithms. |
 | Algorithm policy | ES256/P-256 as the fresh-install default for both purposes; explicit independent overrides; rejection of provider-order/header-driven fallback; published vectors for every supported algorithm. |
 | Key lifecycle | Unattended overlapping rotation in both metadata modes, algorithm migration, restarts, multiple workers, provider rollover, cache overlap, emergency revocation and recovery after failure. |

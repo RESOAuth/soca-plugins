@@ -33,5 +33,7 @@ plugin documents its progress against the requirements.
 
 SOCA is developed by [RESOAuth](https://github.com/RESOAuth). The plugins start
 with RESOAuth provider settings and can be configured for other compatible
-providers. [Dynamic CIMD](https://github.com/RESOAuth/dynamic-cimd) is a related
-metadata hosting service that can be used for proxy mode.
+providers. The shared requirements set
+`https://dynamic-cimd.resoauth.cloud/cimd/%s`, provided by
+[Dynamic CIMD](https://github.com/RESOAuth/dynamic-cimd), as the proxy-mode default
+and require configuration through both the admin UI and code/deployment settings.
