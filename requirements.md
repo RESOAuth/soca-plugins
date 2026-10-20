@@ -25,7 +25,8 @@ capabilities; workarounds and incremental delivery do not lower the bar.
   Prevent CSRF, code replay and issuer mix-up with F-25 transaction/browser binding.
 - **F-03: Identity validation.** Validate ID-token signatures, issuer, subject,
   audience, nonce, times and conditional claims, including response issuer.
-  Match UserInfo to the validated subject and reject conflicting identity claims.
+  Match UserInfo to the validated subject; abort the login on returned subject or
+  identity conflicts, even when retrieval was optional.
   Support fresh authentication and enforce configured assurance using validated
   `auth_time`, `acr` and `amr` with documented provider semantics. Email verification does not
   establish MFA; OAuth access does not establish identity.
@@ -47,17 +48,23 @@ capabilities; workarounds and incremental delivery do not lower the bar.
   public document endpoints, including local HTTPS development. Default to
   `https://dynamic-cimd.resoauth.cloud/cimd/%s`. Make the template configurable
   under F-20. Replace one `%s` in the HTTPS path with unpadded base64url-encoded
-  UTF-8 public metadata JSON. Validate template safety and exact returned metadata,
-  including `client_id` equal to the resulting URL. Provide URL preview, document
-  check and reset to default. Keep provider authentication independent of the proxy
-  and preserve the hosted mode's security guarantees.
+  UTF-8 public metadata JSON using a documented deterministic serialisation and
+  excluding `client_id`; the proxy adds it as the exact resulting URL. Validate
+  template safety and exact returned metadata. Define and enforce payload/URL-size
+  limits across the proxy, provider and transport before activation or key
+  promotion, including overlapping key sets. Provide URL preview, document check
+  and reset to default. Keep provider authentication independent of the proxy and
+  preserve the hosted mode's security guarantees.
 - **F-06: Public data boundary.** Support `jwks_uri` and inline `jwks` where the
   provider permits them. Publish only public client information/keys, never private
   keys, secrets, tokens, user claims or admission rules. Explain that proxy URLs,
   including encoded metadata, are public and visible to the proxy.
 - **F-07: Client identity changes.** Keep client IDs stable where possible. Control
   metadata/key migrations that change IDs, explaining consent, pairwise-subject and
-  account-link effects. Preserve routine in-flight logins using bounded snapshots;
+  account-link effects. Inline keys in encoded proxy URLs change the client ID on
+  rollover; distinguish signing continuity from client-identity continuity. Use
+  stable metadata/key indirection where available, otherwise an explicit migration
+  under F-17. Preserve routine in-flight logins using bounded snapshots;
   invalidate affected transactions immediately on security revocation. Check
   provider metadata/callback-origin restrictions before changes.
 
@@ -73,7 +80,7 @@ capabilities; workarounds and incremental delivery do not lower the bar.
   provider/CDN cache bounds, warm replacements and retain retiring keys through
   outstanding transactions/assertions. Promote atomically across workers; monitor
   overdue/failing rotation and support safe retries, manual triggers and emergency
-  revocation.
+  revocation. Apply F-05 size checks and F-07 identity handling to each rollover.
 - **F-10: ES256 default and algorithm agility.** Use **ES256/P-256** as the required
   default and recommended profile for assertion signing and ID-token verification.
   Generate P-256 client keys and explicitly set `token_endpoint_auth_signing_alg`
@@ -108,14 +115,18 @@ capabilities; workarounds and incremental delivery do not lower the bar.
   exact rules match only that domain; `*.example.com` matches one or more subdomain
   labels, including `a.b.example.com`, but neither `example.com` nor
   `badexample.com`. Report invalid rules; never silently ignore or broaden them.
-- **F-13: Existing users.** Resolve exactly one eligible account; reject ambiguity,
-  disabled users and missing site/access permissions. Preserve local credentials,
-  usernames, roles, groups and privileges unless separately authorised. Never
-  reactivate an account through SSO.
+- **F-13: Existing users.** Resolve returning users through F-16 links to exactly one
+  eligible account; reject ambiguity, disabled users and missing site/access
+  permissions. Unlinked identities require F-16 linking or F-14 provisioning, never
+  automatic email-based selection. Preserve local credentials, usernames, roles,
+  groups and privileges unless separately authorised. Never reactivate an account
+  through SSO.
 - **F-14: New users.** Make provisioning opt-in, after authentication and admission,
   into an explicitly configured least-privileged role/group. Validate local fields;
-  handle collisions, concurrent creation and failures atomically without duplicate
-  accounts, usable default passwords, partial privileges or invalid-user sessions.
+  handle account creation, its F-16 identity link and initial privileges atomically,
+  including collisions, concurrent creation and failures. Leave no duplicate
+  accounts, usable default passwords, partial privileges, orphaned accounts/links
+  or invalid-user sessions.
 - **F-15: Authorisation boundary.** Separate identity, admission and local permissions.
   Support explicit allowlisted claim-to-role/group mappings with issuer binding,
   privilege ceilings and audited changes. Never grant implicit admin privileges;
@@ -139,11 +150,13 @@ capabilities; workarounds and incremental delivery do not lower the bar.
   Define ID-token/UserInfo precedence; validate types, lengths and content, handle
   missing claims/collisions, preserve local edits by default and audit mapping
   changes. Keep profile mapping separate from selection/admission; prohibit writes
-  to credentials, identity links and privilege fields.
+  to credentials, identity links and privilege fields. Optional profile retrieval
+  outages may be non-fatal when validated claims suffice; conflicts follow F-03.
 - **F-19: Claim diagnostics.** Provide privileged, opt-in, short-lived, redacted
-  inspection scoped to a selected test transaction. Explain captured data, encrypt
-  retained reports and delete automatically on expiry. Never retain raw tokens or
-  include claim dumps in routine logs.
+  inspection bound to the initiating operator and a selected F-20 test transaction;
+  never capture unrelated logins. Explain captured data, encrypt retained reports
+  and delete automatically on expiry. Never retain raw tokens or include claim
+  dumps in routine logs.
 
 ### Configuration, sessions and operations
 
@@ -157,18 +170,27 @@ capabilities; workarounds and incremental delivery do not lower the bar.
 
   Share defaults, validation and security policy across code/UI. Document precedence;
   expose effective values/sources through non-UI tools and any existing GUI, with
-  deployment-locked fields read-only. Make repeated deployment safe/reproducible;
-  audit changes, reject stale edits and support rollback. Require document checks
-  and a real test login before profile activation, reporting results separately.
-  Test mode previews admission/mapping without account creation, linking, permission
-  changes or replacing the operator's session.
+  deployment locks that UI/database edits cannot override and locked GUI fields
+  read-only. Make repeated deployment safe/reproducible; audit changes, reject stale
+  edits and support rollback.
+
+  Publish candidate metadata and allow operator-authorised test logins while
+  ordinary SSO remains disabled for that profile. Require successful document checks
+  and a successful real test login before profile activation, reporting results
+  separately and binding evidence to the candidate configuration revision.
+  Invalidate affected evidence on issuer, key, callback or other covered
+  configuration changes. Test mode applies normal protocol, admission and mapping
+  validation without account creation, linking, profile/permission writes or
+  replacing the operator's session.
 - **F-21: Login/logout.** Use host login entry points/sessions and safe local return
   URLs. Support session lifetime, reauthentication, revocation, local logout and
   advertised RP-initiated/back-channel logout. Validate provider logout messages;
   local logout must survive provider outages. Optional automatic redirects need
   loop prevention and local recovery.
 - **F-22: Local recovery.** Retain local administrator login and documented SSO
-  bypass/disable procedures. Protect recovery access with strong local
+  bypass/disable procedures. Provide a deployment-controlled emergency disable
+  that overrides UI/database settings, blocks ordinary and test SSO, and applies
+  F-23 transaction invalidation. Protect recovery access with strong local
   authentication, least privilege and audit. Test before rollout/after upgrades;
   failures must be actionable without lockout or weakened authentication.
 - **F-23: Host/plugin lifecycle.** Respect host account, permission, session,
@@ -244,12 +266,13 @@ capabilities; workarounds and incremental delivery do not lower the bar.
   logins in both metadata modes. Distinguish simulations, document checks and real
   logins; disclose gaps.
 - **N-09: Implementation evidence.** Publish the assessed requirements revision and
-  per-ID support/version/evidence/gaps, provider profiles and protected login
-  surfaces. Document security defaults, units, ranges and hard limits for
-  transaction/assertion lifetimes, clock skew, rotation, metadata/JWKS caching,
-  session revocation and diagnostic retention. Explain derived overlap/retention, unconfirmed
-  provider cache bounds and operator choices. Supply reproducible fixtures and
-  acceptance procedures with dated results.
+  a per-ID table of status, plugin version/commit, test/document reference, result
+  date and remaining gap. Record provider profiles and separate results for each
+  metadata mode and protected login surface. Document security defaults, units,
+  ranges and hard limits for transaction/assertion lifetimes, clock skew, rotation,
+  metadata/JWKS caching, session revocation and diagnostic retention. Explain derived
+  overlap/retention, unconfirmed provider cache bounds and operator choices. Supply
+  reproducible fixtures and acceptance procedures with dated results.
 
 ## Acceptance evidence
 
@@ -258,11 +281,11 @@ Verify each supported ID, including failure and concurrency cases. Explicitly te
 | Area | Cases |
 | --- | --- |
 | Domains | Exact/apex/subdomain/nested matches; `*.example.com` versus invalid `*example.com`; deny precedence and rejected malformed rules. |
-| Metadata/configuration | Hosted/default/custom proxy checks; platform name, branding/legal URLs, overrides and omitted unavailable fields in both modes; wrong documents/IDs, changed URLs, clean headless setup, prior UI settings, precedence/locks and repeat deployment. |
-| Authentication/algorithms | Cancellation, wrong issuer/audience/nonce/signature, ES256 defaults, independent overrides, prohibited fallback and vectors for every algorithm. |
+| Metadata/configuration | Hosted/default/custom proxy checks; platform name, branding/legal URLs, overrides and omitted unavailable fields in both modes; deterministic encoding without `client_id`, exact proxy-added ID, oversized payloads/URLs with overlapping keys; wrong documents/IDs, changed URLs, candidate publication/testing before activation, stale evidence, clean headless setup, deployment changes after UI saves, precedence/locks and repeat deployment. |
+| Authentication/algorithms | Cancellation, wrong issuer/audience/nonce/signature, conflicting optional UserInfo versus unavailable optional profiles, ES256 defaults, independent overrides, prohibited fallback and vectors for every algorithm. |
 | Transactions/sessions | Copied callbacks, replay, parallel tabs, state tampering/expiry, fixation, logout/revocation/assurance and provider outages. |
-| Keys/accounts | Cache overlap, rollover/revocation across workers, duplicate/disabled/reassigned accounts, identity migrations, concurrent creation/linking and preserved local edits/permissions. |
-| Operations | Recovery, failover/restore, upgrades, accessibility/load, release provenance, test-mode side effects, disable/uninstall, token disposal and scoped deletion. |
+| Keys/accounts | Cache overlap, rollover/revocation across workers, proxy client-ID/pairwise-subject migration, duplicate/disabled/reassigned accounts, linked resolution versus email-only matches, identity migrations, atomic concurrent account/link creation and rollback, and preserved local edits/permissions. |
+| Operations | Recovery, emergency disable after UI saves and during tests, failover/restore, upgrades, accessibility/load, release provenance, test-mode profile/account/session side effects, unrelated concurrent logins during inspection, disable/uninstall, token disposal and scoped deletion. |
 
 ## Standards
 
@@ -276,12 +299,15 @@ implementation safety or provider support.
   [client metadata](https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata)
   (metadata vocabulary; no dynamic registration endpoint required).
 - [OAuth security BCP](https://www.rfc-editor.org/rfc/rfc9700.html) and
-  [PKCE](https://www.rfc-editor.org/rfc/rfc7636.html).
+  [PKCE](https://www.rfc-editor.org/rfc/rfc7636.html), with
+  [response issuer identification](https://www.rfc-editor.org/rfc/rfc9207.html).
 - [JWT assertions](https://www.rfc-editor.org/rfc/rfc7523.html),
   [JWT BCP](https://www.rfc-editor.org/rfc/rfc8725.html),
   [JWK](https://www.rfc-editor.org/rfc/rfc7517.html),
   [algorithms](https://www.rfc-editor.org/rfc/rfc7518.html) and
   [JOSE registry](https://www.iana.org/assignments/jose).
+- [Fully specified algorithms](https://www.rfc-editor.org/rfc/rfc9864.html) and
+  [ML-DSA for JOSE/COSE](https://www.rfc-editor.org/rfc/rfc9964.html).
 - [Client metadata fields](https://www.rfc-editor.org/rfc/rfc7591.html#section-2).
 - [RP-initiated logout](https://openid.net/specs/openid-connect-rpinitiated-1_0.html)
   and [back-channel logout](https://openid.net/specs/openid-connect-backchannel-1_0.html).
