@@ -54,9 +54,10 @@ it replaces. Plan delivery incrementally without lowering these acceptance crite
 - **F-05: Proxy mode.** Support a configurable HTTPS metadata proxy when the
   application cannot host publicly reachable metadata, including local HTTPS
   development. When proxy mode is selected, default to
-  `https://dynamic-cimd.resoauth.cloud/cimd/%s`. Provide a privileged admin UI field
-  and code/deployment configuration for replacing the proxy URL template. Use one
-  `%s` placeholder in the HTTPS path for unpadded base64url-encoded UTF-8 JSON
+  `https://dynamic-cimd.resoauth.cloud/cimd/%s`. Provide code/deployment
+  configuration for replacing the proxy URL template and a privileged settings
+  field within the host's existing admin GUI, where available, as defined in F-20.
+  Use one `%s` placeholder in the HTTPS path for unpadded base64url-encoded UTF-8 JSON
   containing public client metadata; the proxy must return `client_id` equal to
   the exact resulting document URL. Validate custom templates and provide a
   generated-URL preview, connection/document check and reset to the default.
@@ -178,18 +179,31 @@ it replaces. Plan delivery incrementally without lowering these acceptance crite
 
 ### Administration, user experience and recovery
 
-- **F-20: Configuration and validation.** Provide an accessible admin experience
-  and code/deployment configuration, plus automation interfaces, for provider,
-  metadata mode and proxy URL, admission, provisioning, mapping and key lifecycle
-  settings. Document precedence, show the effective value and configuration source,
-  and make deployment-locked settings read-only in the UI. Support
-  deployment-managed secrets and policy locks. Validate and preview changes,
-  reject stale concurrent edits, audit updates and support rollback. Require
-  connection/document checks and a successful real
-  test login before activating a new profile; report each result separately. Keep
-  validation mode free of account creation, linking and permission changes, and
-  preserve the operator's current session. Report the effective admission and
-  mapping decisions without applying them.
+- **F-20: Host admin UI and headless configuration.** Every plugin must provide
+  complete, documented code/deployment configuration for all supported settings.
+  Where the host already provides an admin GUI, integrate sensible, accessible
+  settings into that GUI. Do not create a separate admin GUI or require one on a
+  headless platform. Cover provider profiles, metadata mode and proxy URL,
+  admission, provisioning, claim mapping, sessions, diagnostics and key lifecycle.
+  Follow the host's admin conventions, with clear inputs, sensible defaults, help
+  and actionable validation. Keep private secrets in protected deployment storage;
+  an existing admin UI can manage references and show redacted status.
+
+  Support headless installation, initial setup and subsequent configuration changes
+  without opening the plugin's admin UI or saving a form. Provide non-UI interfaces
+  for configuration checks, status, enable/disable and maintenance. Where UI
+  configuration exists, apply the same defaults, validation and security policy
+  through UI and code. Document precedence and expose effective values and their
+  configuration sources through non-UI tools and any existing admin UI. Make
+  deployment-locked settings read-only in that UI. Repeated deployment of the same
+  configuration must be safe and reproducible. Audit updates, reject stale
+  concurrent edits and support rollback.
+
+  Require connection/document checks and a successful real test login before
+  activating a new profile; report each result separately. Keep validation mode
+  free of account creation, linking and permission changes, and preserve the
+  operator's current session. Report effective admission and mapping decisions
+  without applying them.
 - **F-21: Login and logout.** Integrate a clear SSO entry point into the host's
   login experience, create normal host sessions after successful admission, and
   restrict post-login destinations to safe local URLs. Support configurable session
@@ -326,7 +340,8 @@ the full outcome; a manual workaround does not close the gap. Retain evidence fo
 
 | Area | Representative checks |
 | --- | --- |
-| Metadata | Hosted and proxy documents, the default Dynamic CIMD template, custom proxy configuration through both UI and code, precedence/locks, template validation, exact client ID, public-only keys, unavailable/incorrect documents and proxy URL changes. |
+| Metadata | Hosted and proxy documents, the default Dynamic CIMD template, custom proxy configuration through code and any existing admin GUI, precedence/locks, template validation, exact client ID, public-only keys, unavailable/incorrect documents and proxy URL changes. |
+| Configuration | Integration with an existing admin GUI where available; no invented GUI on headless hosts; complete headless setup from a clean install; code changes after prior UI use where applicable; matching defaults/validation; effective values and precedence/locks; safe repeated deployment; non-UI checks, status and maintenance. |
 | Authentication | Successful login and cancellation; expired/replayed/wrong-browser callbacks; issuer, audience, nonce and signature failures; unsupported algorithms. |
 | Algorithm policy | ES256/P-256 as the fresh-install default for both purposes; explicit independent overrides; rejection of provider-order/header-driven fallback; published vectors for every supported algorithm. |
 | Key lifecycle | Unattended overlapping rotation in both metadata modes, algorithm migration, restarts, multiple workers, provider rollover, cache overlap, emergency revocation and recovery after failure. |

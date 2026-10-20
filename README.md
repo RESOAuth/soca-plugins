@@ -31,9 +31,13 @@ existing users, claim association, security and operations. They set the highest
 bar for the finished product. Current plugin limitations are gaps to close; each
 plugin documents its progress against the requirements.
 
+Every plugin must provide complete code/deployment configuration for headless
+setup. Where the host already has an admin GUI, plugins must integrate sensible
+settings into it. A headless platform does not require a new GUI.
+
 SOCA is developed by [RESOAuth](https://github.com/RESOAuth). The plugins start
 with RESOAuth provider settings and can be configured for other compatible
 providers. The shared requirements set
 `https://dynamic-cimd.resoauth.cloud/cimd/%s`, provided by
 [Dynamic CIMD](https://github.com/RESOAuth/dynamic-cimd), as the proxy-mode default
-and require configuration through both the admin UI and code/deployment settings.
+and require code/deployment configuration plus settings in any existing admin GUI.
